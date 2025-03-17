@@ -268,6 +268,7 @@ type ChallengeEnv struct {
 	Entrypoint       string           `toml:"entrypoint"`
 	DockerCtx        string           `toml:"docker_context"`
 	XinetdConf       string           `toml:"xinetd_conf"`
+	DockerCompose    string           `toml:"docker_compose"`
 	EnvironmentVars  []EnvironmentVar `toml:"var"`
 	Traffic          string           `toml:"traffic"`
 }
