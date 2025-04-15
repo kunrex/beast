@@ -256,7 +256,7 @@ func deployChallenge(challenge *database.Challenge, config cfg.BeastChallengeCon
 
 	// Since till this point we have already valiadated the challenge config this is highly
 	// unlikely to fail.
-	portMapping, err := config.Challenge.Env.GetPortMappings()
+	portMapping, err := config.Challenge.Env.GetPortMappings(config.Challenge.Metadata.Type)
 	if err != nil {
 		return fmt.Errorf("error while parsing port mapping for the challenge %s: %s", config.Challenge.Metadata.Name, err)
 	}

@@ -366,7 +366,7 @@ func appendAdditionalFileContexts(additionalCtx map[string]string, config *cfg.B
 				return fmt.Errorf("error while parsing Xinetd config template :: %s", err)
 			}
 
-			port := config.Challenge.Env.GetDefaultPort()
+			port := config.Challenge.Env.GetDefaultPort(config.Challenge.Metadata.Type)
 
 			data := BeastXinetdConf{
 				Port:        fmt.Sprintf("%d", port),

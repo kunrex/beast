@@ -56,6 +56,7 @@ const ( //chall types
 	SERVICE_CHALLENGE_TYPE_NAME string = "service"
 	WEB_CHALLENGE_TYPE_NAME     string = "web"
 	BARE_CHALLENGE_TYPE_NAME    string = "bare"
+	SSH_CHALLENGE_TYPE_NAME     string = "ssh"
 )
 
 const ( // chall actions
@@ -89,7 +90,7 @@ const ( // default config
 	ITERATIONS               int    = 65536
 	HASH_LENGTH              int    = 32
 	TIMEPERIOD               int64  = 6 * 60 * 60
-	SSH_PORT                 int    = 22
+	SSH_PORT                 uint32 = 22
 )
 
 const ( // roles
@@ -138,7 +139,7 @@ var SIDECAR_ENV_PREFIX = map[string]string{
 }
 
 // Available challenge types
-var AVAILABLE_CHALLENGE_TYPES = []string{STATIC_CHALLENGE_TYPE_NAME, SERVICE_CHALLENGE_TYPE_NAME, BARE_CHALLENGE_TYPE_NAME, WEB_CHALLENGE_TYPE_NAME}
+var AVAILABLE_CHALLENGE_TYPES = []string{STATIC_CHALLENGE_TYPE_NAME, SERVICE_CHALLENGE_TYPE_NAME, BARE_CHALLENGE_TYPE_NAME, WEB_CHALLENGE_TYPE_NAME, SSH_CHALLENGE_TYPE_NAME}
 
 var DockerBaseImageForWebChall = map[string]map[string]map[string]string{
 	"php": {
