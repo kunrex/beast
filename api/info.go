@@ -612,16 +612,32 @@ func getAllUsersInfoHandler(c *gin.Context) {
 // @Router /api/info/submissions [get]
 func submissionsHandler(c *gin.Context) {
 
-	submissions, err := database.QueryAllSubmissions()
+	// check if the requesting user is an admin
+	authHeader := c.GetHeader("Authorization")
+	values := strings.Split(authHeader, " ")
+
+	if len(values) < 2 || values[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, HTTPPlainResp{
+			Message: "No Token Provided",
+		})
+		c.Abort()
+		return
+	}
+
+	autherr := auth.Authorize(values[1], core.ADMIN)
+	isAdmin := (autherr == nil)
+
+	allSubmissions, err := database.GetAllSubmissions()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HTTPErrorResp{
 			Error: "DATABASE ERROR while processing the request.",
 		})
 		return
 	}
+	
 	submissionsResp := make([]SubmissionResp, 0)
 
-	for _, submission := range submissions {
+	for _, submission := range allSubmissions {
 		user, err := database.QueryUserById(submission.UserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
@@ -631,6 +647,11 @@ func submissionsHandler(c *gin.Context) {
 		}
 
 		if user.Role == core.USER_ROLES["contestant"] {
+
+			if !isAdmin && !submission.Solved {
+				continue
+			}
+
 			challenge, err := database.QueryChallengeEntries("id", strconv.Itoa(int(submission.ChallengeID)))
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, HTTPErrorResp{
@@ -656,8 +677,15 @@ func submissionsHandler(c *gin.Context) {
 				Category:  challenge[0].Type,
 				Tags:      challengeTags,
 				Points:    challenge[0].Points,
-				SolvedAt:  submission.CreatedAt,
+				SolvedAt:  submission.SubmittedAt,
 			}
+
+			// Only show flags and solved status to admins
+			if isAdmin {
+				singleSubmissionResp.Solved = submission.Solved
+				singleSubmissionResp.SubmittedFlag = submission.Flag
+			}
+
 			submissionsResp = append(submissionsResp, singleSubmissionResp)
 		}
 	}

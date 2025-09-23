@@ -130,14 +130,16 @@ type ChallengePreviewResp struct {
 }
 
 type SubmissionResp struct {
-	UserId    uint      `json:"user_id" example:"3"`
-	Username  string    `json:"username" example:"fristonio"`
-	ChallId   uint      `json:"chall_id" example:"3"`
-	ChallName string    `json:"name" example:"Web Challenge"`
-	Category  string    `json:"category" example:"web"`
-	Tags      []string  `json:"tags" example:"['pwn','misc']"`
-	Points    uint      `json:"points" example:"50"`
-	SolvedAt  time.Time `json:"solvedAt"`
+	UserId        uint      `json:"user_id" example:"3"`
+	Username      string    `json:"username" example:"fristonio"`
+	ChallId       uint      `json:"chall_id" example:"3"`
+	ChallName     string    `json:"name" example:"Web Challenge"`
+	Category      string    `json:"category" example:"web"`
+	Tags          []string  `json:"tags" example:"['pwn','misc']"`
+	Points        uint      `json:"points" example:"50"`
+	SolvedAt      time.Time `json:"solvedAt"`
+	Solved        bool      `json:"solved,omitempty" example:"true"`
+	SubmittedFlag string    `json:"submitted_flag,omitempty" example:"flag{example_flag}"`
 }
 
 type FlagSubmitResp struct {

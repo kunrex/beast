@@ -71,6 +71,15 @@ type UserChallenges struct {
 	Flag        string
 }
 
+type Submissions struct {
+	gorm.Model
+	UserID      uint
+	ChallengeID uint
+	Flag        string
+	Solved      bool
+	SubmittedAt time.Time
+}
+
 // The `DynamicFlags` table has the following columns
 // name
 // flag
@@ -310,6 +319,81 @@ func SaveFlagSubmission(user_challenges *UserChallenges) error {
 		return err
 	}
 	return tx.Commit().Error
+}
+
+// SaveSubmission saves a flag submission to the Submissions table
+func SaveSubmission(submission *Submissions) error {
+	DBMux.Lock()
+	defer DBMux.Unlock()
+
+	tx := Db.Begin()
+
+	if tx.Error != nil {
+		return fmt.Errorf("error while starting transaction: %s", tx.Error)
+	}
+
+	if err := tx.Create(submission).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
+}
+
+// GetUserSubmissions retrieves all submissions for a specific user
+func GetUserSubmissions(userID uint) ([]Submissions, error) {
+	var submissions []Submissions
+
+	DBMux.Lock()
+	defer DBMux.Unlock()
+
+	if err := Db.Where("user_id = ?", userID).Find(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
+}
+
+// GetChallengeSubmissions retrieves all submissions for a specific challenge
+func GetChallengeSubmissions(challengeID uint) ([]Submissions, error) {
+	var submissions []Submissions
+
+	DBMux.Lock()
+	defer DBMux.Unlock()
+
+	if err := Db.Where("challenge_id = ?", challengeID).Find(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
+}
+
+// GetUserChallengeSubmissions retrieves all submissions for a specific user and challenge
+func GetUserChallengeSubmissions(userID, challengeID uint) ([]Submissions, error) {
+	var submissions []Submissions
+
+	DBMux.Lock()
+	defer DBMux.Unlock()
+
+	if err := Db.Where("user_id = ? AND challenge_id = ?", userID, challengeID).Find(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
+}
+
+// GetAllSubmissions retrieves all submissions from the database
+func GetAllSubmissions() ([]Submissions, error) {
+	var submissions []Submissions
+
+	DBMux.Lock()
+	defer DBMux.Unlock()
+
+	if err := Db.Find(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
 }
 
 // hook after update of challenge
