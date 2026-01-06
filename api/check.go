@@ -156,12 +156,19 @@ func checkSolutionHandler(c *gin.Context) {
 			return
 		}
 
-		exitCode, response := executeCheckSolution(challenge)
+		exitCode, err := executeCheckSolution(challenge)
 		solved = exitCode == 0
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
+				Error: "CONTAINER RUNTIME ERROR while processing the request.",
+			})
+			return
+		}
 
 		if !solved {
 			c.JSON(http.StatusOK, FlagSubmitResp{
-				Message: fmt.Sprintf("Challenge check failed with response: %s", response),
+				Message: fmt.Sprintf("Challenge check failed with EXIT CODE: %v", exitCode),
 				Success: false,
 			})
 			return
@@ -191,7 +198,7 @@ func checkSolutionHandler(c *gin.Context) {
 			UserID:      user.ID,
 			ChallengeID: challenge.ID,
 			Solved:      true,
-			Flag:        "", /* empty for now */
+			Flag:        "", // empty for now
 		}
 
 		err = database.SaveFlagSubmission(&UserChallengesEntry)
@@ -203,7 +210,7 @@ func checkSolutionHandler(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, FlagSubmitResp{
-			Message: "Your flag is correct",
+			Message: "Challenge check passed.",
 			Success: true,
 		})
 
@@ -213,7 +220,7 @@ func checkSolutionHandler(c *gin.Context) {
 
 func executeCheckSolution(challenge database.Challenge) (int, error) {
 	challengeName := challenge.Name
-	checkCommand := fmt.Sprintf("[ -f \"~/check.sh\" ] && cd && ./check.sh")
+	checkCommand := fmt.Sprintf("[ -f \"$HOME/check.sh\" ] && cd \"$HOME\" && ./check.sh")
 
 	if challenge.ContainerId == coreUtils.GetTempContainerId(challengeName) {
 		log.Warnf(fmt.Sprintf("No instance of challenge(%s) deployed", challengeName))
