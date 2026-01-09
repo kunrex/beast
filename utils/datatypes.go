@@ -44,6 +44,13 @@ func UInt32InList(a uint32, list []uint32) bool {
 	return false
 }
 
+func RemoveElementAtIndexUnordered[T any](list []T, i int) []T {
+	lengthDec := len(list) - 1
+
+	list[i] = list[lengthDec]
+	return list[:lengthDec]
+}
+
 // ParsePortMapping parses the port mapping string and return the required ports
 // If the portMapping string is not valid, this returns an error.
 // The format of the port mapping is `HOST_PORT:CONTAINER_PORT`

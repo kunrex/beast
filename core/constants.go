@@ -89,7 +89,12 @@ const ( // default config
 	ITERATIONS               int    = 65536
 	HASH_LENGTH              int    = 32
 	TIMEPERIOD               int64  = 6 * 60 * 60
-	SSH_PORT                 int    = 22
+	SSH_PORT                 uint32 = 22
+	SSHFanPortFirst          uint32 = 2200
+	/* Does act as a hard limit for the number of containers on localhost */
+	SSHFanPortLength uint32 = 99
+
+	SSHFanPortLast uint32 = SSHFanPortFirst + SSHFanPortLength
 )
 
 const ( // roles
