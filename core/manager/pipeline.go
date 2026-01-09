@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sdslabs/beastv4/core"
@@ -345,6 +346,43 @@ func deployChallenge(challenge *database.Challenge, config cfg.BeastChallengeCon
 	if err = database.UpdateChallenge(challenge, map[string]interface{}{"ContainerId": containerId}); err != nil {
 		return fmt.Errorf("error while saving containerId to database : %s", err)
 	}
+
+	// Validate the check file exists
+	log.Debugf("checking existance of check script in container: %s...", containerId)
+
+	var result cr.ExecResult
+	fileCommand := fmt.Sprintf("[ -f '%s' ]", core.SAD_CHECK_SCRIPT_LOCATION)
+	if localDeploy {
+		result, err = cr.RunCommandInContainer(containerId, []string{
+			"sh", "-c", fileCommand,
+		})
+	} else {
+		server := cfg.Cfg.AvailableServers[challenge.ServerDeployed]
+		result, err = remoteManager.RunCommandInContainerOnServer(server, containerId, fileCommand)
+	}
+
+	if err != nil || result.ExitCode != 0 {
+		return fmt.Errorf("failed to verify 'check.sh' at location: %s", core.SAD_CHECK_SCRIPT_LOCATION)
+	}
+
+	// Hash check.sh and store into flag
+	log.Debugf("hashing content of 'check.sh' in container: %s...", containerId)
+	hashCommand := fmt.Sprintf("comand cat %s | sha256sum")
+	if localDeploy {
+		result, err = cr.RunCommandInContainer(containerId, []string{
+			"sh", "-c", hashCommand,
+		})
+	} else {
+		server := cfg.Cfg.AvailableServers[challenge.ServerDeployed]
+		result, err = remoteManager.RunCommandInContainerOnServer(server, containerId, hashCommand)
+	}
+
+	if err != nil || result.ExitCode != 0 {
+		return fmt.Errorf("failed to hash 'check.sh' to store flag: %s", core.SAD_CHECK_SCRIPT_LOCATION)
+	}
+
+	challenge.DynamicFlag = false
+	challenge.Flag = strings.TrimSpace(result.Output)
 
 	return nil
 }

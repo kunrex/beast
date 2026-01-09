@@ -49,6 +49,7 @@ const ( //paths
 	BEAST_ASSETS_DIR               string = "assets"
 	BEAST_LOGO_DIR                 string = "logo"
 	BEAST_EMAIL_TEMPLATE_DIR       string = "mailTemplates"
+	SAD_CHECK_SCRIPT_LOCATION      string = "$HOME/check.sh"
 )
 
 const ( //chall types
@@ -211,6 +212,6 @@ var USER_STATUS = map[string]string{
 }
 
 const (
-	LEADERBOARD_SIZE = 25
+	LEADERBOARD_SIZE       = 25
 	LEADERBOARD_GRAPH_SIZE = 12
 )
