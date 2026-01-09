@@ -3,7 +3,7 @@ package cr
 import (
 	"bytes"
 	"fmt"
-	"github.com/docker/docker/pkg/stdcopy"
+	"io"
 	"io/ioutil"
 	"strconv"
 
@@ -26,8 +26,7 @@ type PortMapping struct {
 
 type ExecResult struct {
 	ExitCode int
-	StdOut   string
-	StdErr   string
+	Output   string
 }
 
 // TrafficType is the protocol supported by container ingress and egress through
@@ -290,7 +289,9 @@ func CommitContainer(containerId string) (string, error) {
 }
 
 func RunCommandInContainer(containerID string, cmd []string) (ExecResult, error) {
-	result := ExecResult{}
+	result := ExecResult{
+		ExitCode: 1,
+	}
 
 	cli, err := client.NewEnvClient()
 	if err != nil {
@@ -304,6 +305,7 @@ func RunCommandInContainer(containerID string, cmd []string) (ExecResult, error)
 		containerID,
 		types.ExecConfig{
 			Cmd:          cmd,
+			Tty:          true,
 			AttachStdout: true,
 			AttachStderr: true,
 		},
@@ -322,14 +324,11 @@ func RunCommandInContainer(containerID string, cmd []string) (ExecResult, error)
 	}
 	defer resp.Close()
 
-	var stdout, stderr bytes.Buffer
-	_, err = stdcopy.StdCopy(&stdout, &stderr, resp.Reader)
+	var output bytes.Buffer
+	_, err = io.Copy(&output, resp.Reader)
 	if err != nil {
 		return result, err
 	}
-
-	result.StdOut = stdout.String()
-	result.StdErr = stderr.String()
 
 	inspect, err := cli.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
