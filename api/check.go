@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/sdslabs/beastv4/core"
@@ -10,9 +9,9 @@ import (
 	coreUtils "github.com/sdslabs/beastv4/core/utils"
 	"github.com/sdslabs/beastv4/pkg/cr"
 	"github.com/sdslabs/beastv4/pkg/remoteManager"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -156,8 +155,38 @@ func checkSolutionHandler(c *gin.Context) {
 			return
 		}
 
-		exitCode, err := executeCheckSolution(challenge)
-		solved = exitCode == 0
+		localDeploy := challenge.ServerDeployed != core.LOCALHOST && challenge.ServerDeployed != ""
+
+		exists, err := checkScriptScriptExists(localDeploy, challenge)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
+				Error: "CONTAINER RUNTIME ERROR while processing the request.",
+			})
+			return
+		}
+		if !exists {
+			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
+				Error: fmt.Sprintf("VALIDATION ERROR: check.sh not found at %s.", core.SAD_CHECK_SCRIPT_LOCATION),
+			})
+			return
+		}
+
+		verified, err := validateCheckScriptHash(localDeploy, challenge)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
+				Error: "CONTAINER RUNTIME ERROR while processing the request.",
+			})
+			return
+		}
+		if !verified {
+			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
+				Error: "VALIDATION ERROR: hash of check.sh does not match, file tampered with.",
+			})
+			return
+		}
+
+		result, err := executeCheckScript(localDeploy, challenge)
+		solved = result.ExitCode == 0
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, HTTPErrorResp{
@@ -168,7 +197,7 @@ func checkSolutionHandler(c *gin.Context) {
 
 		if !solved {
 			c.JSON(http.StatusOK, FlagSubmitResp{
-				Message: fmt.Sprintf("Challenge check failed with EXIT CODE: %v", exitCode),
+				Message: fmt.Sprintf("Challenge check failed with EXIT CODE: %v\nLOGS: %s", result.ExitCode, result.Output),
 				Success: false,
 			})
 			return
@@ -218,81 +247,60 @@ func checkSolutionHandler(c *gin.Context) {
 	}
 }
 
-func executeCheckSolution(challenge database.Challenge) (int, error) {
-	challengeName := challenge.Name
-	checkCommand := fmt.Sprintf("[ -f \"$HOME/check.sh\" ] && cd \"$HOME\" && ./check.sh")
+func checkScriptScriptExists(localDeploy bool, challenge database.Challenge) (bool, error) {
+	var err error
+	var result cr.ExecResult
 
-	if challenge.ContainerId == coreUtils.GetTempContainerId(challengeName) {
-		log.Warnf(fmt.Sprintf("No instance of challenge(%s) deployed", challengeName))
-		return 1, errors.New("no instance of challenge")
+	containerId := challenge.ContainerId
+	fileCommand := fmt.Sprintf("[ -f '%s' ]", core.SAD_CHECK_SCRIPT_LOCATION)
+	if localDeploy {
+		result, err = cr.RunCommandInContainer(containerId, []string{
+			"sh", "-c", fileCommand,
+		})
 	} else {
-		log.Debugf("Checking check solution script for challenge(%s)", challengeName)
-		if challenge.ServerDeployed != core.LOCALHOST && challenge.ServerDeployed != "" {
-			server := config.Cfg.AvailableServers[challenge.ServerDeployed]
-			return executeCheckSolutionOnRemoteContainer(challenge.ContainerId, checkCommand, server)
-		} else {
-			return executeCheckSolutionOnLocalhost(challenge.ContainerId, checkCommand)
-		}
+		server := config.Cfg.AvailableServers[challenge.ServerDeployed]
+		result, err = remoteManager.RunCommandInContainerOnServer(server, containerId, fileCommand)
 	}
+
+	if err != nil || result.ExitCode != 0 {
+		return false, err
+	}
+
+	return true, nil
 }
 
-func executeCheckSolutionOnLocalhost(containerId string, checkCommand string) (int, error) {
-	containers, err := cr.SearchRunningContainerByFilter(map[string]string{"id": containerId})
+func validateCheckScriptHash(localDeploy bool, challenge database.Challenge) (bool, error) {
+	var err error
+	var result cr.ExecResult
+
+	containerId := challenge.ContainerId
+	hashCommand := fmt.Sprintf("comand cat %s | sha256sum")
+	if localDeploy {
+		result, err = cr.RunCommandInContainer(containerId, []string{
+			"sh", "-c", hashCommand,
+		})
+	} else {
+		server := config.Cfg.AvailableServers[challenge.ServerDeployed]
+		result, err = remoteManager.RunCommandInContainerOnServer(server, containerId, hashCommand)
+	}
+
 	if err != nil {
-		log.Errorf("error while searching for local container with id %s", containerId)
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
+		return false, err
+	}
+	if result.ExitCode != 0 {
+		return false, fmt.Errorf("check script hash failed")
 	}
 
-	switch len(containers) {
-	case 0:
-		log.Error("Got no containers without throwing an error, something fishy here. Contact admin to check manually.")
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
-	case 1:
-		{
-			result, err := cr.RunCommandInContainer(containerId, []string{
-				"sh", "-c", checkCommand,
-			})
-
-			if err != nil {
-				return 1, err
-			}
-
-			return result.ExitCode, err
-		}
-	default:
-		log.Error("Got more than one containers, something fishy here. Contact admin to check manually.")
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
-	}
+	return strings.TrimSpace(result.Output) == challenge.Flag, nil
 }
 
-func executeCheckSolutionOnRemoteContainer(containerId string, checkCommand string, server config.AvailableServer) (int, error) {
-	remoteContainers, err := remoteManager.SearchRunningContainerByFilterRemote(map[string]string{"id": containerId}, server)
-	if err != nil {
-		log.Errorf("error while searching for remote container with id %s", containerId)
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
-	}
-
-	switch len(remoteContainers) {
-	case 0:
-		log.Error("Got no containers without throwing an error, something fishy here. Contact admin to check manually.")
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
-	case 1:
-		{
-			dockerCommand := fmt.Sprintf("docker exec %s %s; echo $?", containerId, checkCommand)
-			output, err := remoteManager.RunCommandOnServer(server, dockerCommand)
-			if err != nil {
-				return 1, err
-			}
-
-			converted, err := strconv.Atoi(output)
-			if err == nil {
-				return 1, err
-			}
-
-			return converted, nil
-		}
-	default:
-		log.Error("Got more than one containers, something fishy here. Contact admin to check manually.")
-		return 1, errors.New("CONTAINER RUNTIME ERROR")
+func executeCheckScript(localDeploy bool, challenge database.Challenge) (cr.ExecResult, error) {
+	if localDeploy {
+		return cr.RunCommandInContainer(challenge.ContainerId, []string{
+			"sh", "-c", core.SAD_CHECK_SCRIPT_LOCATION,
+		})
+	} else {
+		server := config.Cfg.AvailableServers[challenge.ServerDeployed]
+		return remoteManager.RunCommandInContainerOnServer(server, challenge.ContainerId, core.SAD_CHECK_SCRIPT_LOCATION)
 	}
 }
