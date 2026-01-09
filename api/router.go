@@ -116,11 +116,6 @@ func initGinRouter() *gin.Engine {
 			configGroup.POST("/challenge-info", updateChallengeInfoHandler)
 		}
 
-		submitGroup := apiGroup.Group("/submit")
-		{
-			submitGroup.POST("/challenge", submitFlagHandler)
-		}
-
 		checkGroup := apiGroup.Group("/check")
 		{
 			checkGroup.POST("/challenge", checkSolutionHandler)
