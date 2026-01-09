@@ -218,6 +218,8 @@ func commitChallenge(challenge *database.Challenge, config cfg.BeastChallengeCon
 func deployChallenge(challenge *database.Challenge, config cfg.BeastChallengeConfig) error {
 	log.Debug("Starting to deploy the challenge")
 
+	localDeploy := challenge.ServerDeployed == core.LOCALHOST || challenge.ServerDeployed == ""
+
 	staticMount := make(map[string]string)
 	var staticMountDir string
 	if localDeploy {
@@ -261,6 +263,50 @@ func deployChallenge(challenge *database.Challenge, config cfg.BeastChallengeCon
 		return fmt.Errorf("error while parsing port mapping for the challenge %s: %s", config.Challenge.Metadata.Name, err)
 	}
 
+	// Port 22 needs to be free
+	for _, portMap := range portMapping {
+		if portMap.ContainerPort == core.SSH_PORT {
+			return fmt.Errorf("attempting to map port %v for challenge %s... This port is used for ssh", core.SSH_PORT, config.Challenge.Metadata.Name)
+		}
+	}
+
+	// register ports being used
+	if localDeploy {
+		sshFanOutPort, success := cr.GetAvailableSSHPort()
+		if !success {
+			return fmt.Errorf("could not register SSH port for challenge %s", config.Challenge.Metadata.Name)
+		}
+
+		portMapping = append(portMapping, cr.PortMapping{
+			HostPort:      sshFanOutPort,
+			ContainerPort: core.SSH_PORT,
+		})
+
+		for _, portMap := range portMapping {
+			if !cr.RegisterPort(challenge.ID, portMap.HostPort) {
+				return fmt.Errorf("error while registering port for the challenge %s... Port: %s already in use", config.Challenge.Metadata.Name, portMap.HostPort)
+			}
+		}
+	} else {
+		server := cfg.Cfg.AvailableServers[challenge.ServerDeployed]
+
+		sshFanOutPort, success := remoteManager.GetAvailableSSHPort(server)
+		if !success {
+			return fmt.Errorf("could not register SSH port for challenge %s on host: %s", config.Challenge.Metadata.Name, server.Host)
+		}
+
+		portMapping = append(portMapping, cr.PortMapping{
+			HostPort:      sshFanOutPort,
+			ContainerPort: core.SSH_PORT,
+		})
+
+		for _, portMap := range portMapping {
+			if !remoteManager.RegisterPort(server, challenge.ID, portMap.HostPort) {
+				return fmt.Errorf("error while registering port for the challenge %s... Port: %s on Host: %s already in use", config.Challenge.Metadata.Name, portMap.HostPort, server.Host)
+			}
+		}
+	}
+
 	containerConfig := cr.CreateContainerConfig{
 		PortMapping:      portMapping,
 		MountsMap:        staticMount,
@@ -276,7 +322,7 @@ func deployChallenge(challenge *database.Challenge, config cfg.BeastChallengeCon
 	}
 	log.Debugf("create container config for challenge(%s): %v", config.Challenge.Metadata.Name, containerConfig)
 	var containerId string
-	if challenge.ServerDeployed == core.LOCALHOST || challenge.ServerDeployed == "" {
+	if localDeploy {
 		containerId, err = cr.CreateContainerFromImage(&containerConfig)
 	} else {
 		server := cfg.Cfg.AvailableServers[challenge.ServerDeployed]

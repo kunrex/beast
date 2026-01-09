@@ -648,8 +648,14 @@ func undeployChallenge(challengeName string, purge bool) error {
 		if challenge.ServerDeployed != core.LOCALHOST && challenge.ServerDeployed != "" {
 			server := config.Cfg.AvailableServers[challenge.ServerDeployed]
 			err = remoteManager.StopAndRemoveContainerRemote(challenge.ContainerId, server)
+
+			// Free ports
+			remoteManager.FreeChallengePorts(challenge.ID)
 		} else {
 			err = cr.StopAndRemoveContainer(challenge.ContainerId)
+
+			// Free ports
+			cr.FreeChallengePorts(challenge.ID)
 		}
 		if err != nil {
 			// This should not return from here, this should assume that
