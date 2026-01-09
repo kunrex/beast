@@ -23,7 +23,7 @@ func CreateContainerFromImageRemote(containerConfig cr.CreateContainerConfig, se
 		containerEnv += fmt.Sprintf("--env %s ", envVar)
 	}
 	for _, portMapping := range containerConfig.PortMapping {
-		portMap += fmt.Sprintf("-p 0.0.0.0:%d:%d/%s ", portMapping.ContainerPort, portMapping.HostPort, containerConfig.TrafficType())
+		portMap += fmt.Sprintf("-p 0.0.0.0:%d:%d/%s ", portMapping.HostPort, portMapping.ContainerPort, containerConfig.TrafficType())
 		exposedPorts += fmt.Sprintf("--expose %d ", portMapping.ContainerPort)
 	}
 	if containerConfig.CPUShares != 0 {
